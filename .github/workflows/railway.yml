@@ -1,0 +1,34 @@
+name: Deploy to Railway
+
+# Deploys the built site to Railway on every push to master, plus a
+# manual trigger. Requires a RAILWAY_TOKEN repo secret (a Railway
+# project token: Railway project → Settings → Tokens).
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
+
+      - name: Deploy
+        run: railway up --service nephi --ci
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
