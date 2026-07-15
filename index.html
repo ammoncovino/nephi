@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NEPHI</title>
+<meta name="description" content="NEPHI — coming soon." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500&family=Pinyon+Script&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --white: #fefefe;
+    --ink: #0b0b0b;
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    background: var(--white);
+    overscroll-behavior: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    font-family: "IBM Plex Mono", monospace;
+    color: var(--ink);
+    overflow-x: hidden;
+  }
+  /* hide scrollbar, like the reference */
+  body::-webkit-scrollbar { display: none; }
+  html { scrollbar-width: none; }
+  /* scroll runway: one viewport of travel floods the page with ink */
+  .scroll-space { height: 350vh; }
+
+  /* ---- oarfish info box: surfaces when the water fill completes ---- */
+  .oarfish {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    z-index: 3;
+    width: min(560px, 92vw);
+    max-height: 86svh;
+    overflow-y: auto;
+    padding: clamp(1.1rem, 3vw, 2rem);
+    border-radius: 18px;
+    background: rgba(20, 20, 22, 0.55);
+    backdrop-filter: blur(9px);
+    -webkit-backdrop-filter: blur(9px);
+    border: 1px solid rgba(200, 200, 200, 0.22);
+    box-shadow:
+      0 0 24px rgba(180, 180, 180, 0.10),
+      inset 0 0 18px rgba(180, 180, 180, 0.05);
+    color: #d4d4d4;
+    --lift: 0vh; /* phase-2 scroll pushes the box up and away */
+    pointer-events: auto; /* clickable: a tap bobs it in the water */
+    cursor: pointer;
+    opacity: 0;
+    /* position and opacity are driven per-frame by JS from the same
+       smoothed scroll value as the water, so the box rises and sinks
+       in lockstep with the waterline — no fire-and-forget animations */
+    transform: translate(-50%, 75vh);
+  }
+  @media (min-width: 760px) {
+    .oarfish { left: 62%; } /* room for the oarfish on the left */
+  }
+  /* inner wrapper carries the idle bob and the click-bump, so they
+     stack cleanly on top of the JS-driven position of the box itself */
+  .oarfish .binner { animation: box-bob 7s ease-in-out infinite; }
+  @keyframes box-bob {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-9px); }
+  }
+  .oarfish .binner.bump {
+    animation:
+      box-bob 7s ease-in-out infinite,
+      box-bump 1.1s cubic-bezier(0.3, 0.7, 0.4, 1);
+  }
+  @keyframes box-bump {
+    0%   { transform: translateY(0); }
+    22%  { transform: translateY(16px); }
+    55%  { transform: translateY(-11px); }
+    80%  { transform: translateY(5px); }
+    100% { transform: translateY(0); }
+  }
+  /* photo box shares the info box shell, but never scrolls internally:
+     images are height-capped and cropped so everything fits at once */
+  .oarfish.photos { overflow: hidden; max-height: none; }
+  .oarfish.photos figure { margin: 0 0 0.8rem; }
+  .oarfish.photos figure:last-child { margin-bottom: 0; }
+  .oarfish.photos img {
+    width: 100%;
+    max-height: 16svh;
+    object-fit: cover;
+    display: block;
+    border-radius: 10px;
+    border: 1px solid rgba(200, 200, 200, 0.14);
+    filter: saturate(0.75) contrast(1.02);
+  }
+  .oarfish.photos figcaption {
+    font-size: 0.7rem;
+    line-height: 1.45;
+    color: rgba(212, 212, 212, 0.7);
+    padding-top: 0.3rem;
+  }
+
+  /* ---- the oarfish itself: swims up the left side, then hangs there ---- */
+  .fish {
+    position: fixed;
+    /* anchored to the info box, not the viewport edge: box center is
+       at 62vw, box half-width is min(280px, 46vw), fish is ~22svh wide,
+       plus a small gap — so it stays snug beside the box at any width */
+    left: max(0.5rem, calc(62vw - min(280px, 46vw) - 22svh - 2.5rem - 4vw));
+    top: 6svh;
+    height: 88svh;
+    aspect-ratio: 176 / 706;
+    overflow: visible;
+    z-index: 2; /* in the water: above the fluid canvas, below the info box */
+    pointer-events: none;
+    transform: translateY(112vh); /* JS lerps this every frame from scroll */
+    will-change: transform;
+    filter: drop-shadow(0 0 16px rgba(130, 190, 255, 0.18));
+  }
+  /* continuous dorsal fin: the periodic frill scrolls downward behind
+     its clip mask, so the undulation travels the whole fin */
+  .fish .fin-run { animation: fin-travel 1.3s linear infinite; }
+  @keyframes fin-travel {
+    from { transform: translateY(-60px); } /* one frill period */
+    to   { transform: translateY(0); }
+  }
+  .fish .cray { transform-box: fill-box; transform-origin: bottom right; animation: crest-sway 3.4s ease-in-out infinite; }
+  .fish .cray.c2 { animation-delay: -1.2s; }
+  .fish .cray.c3 { animation-delay: -2.3s; }
+  @keyframes crest-sway {
+    0%, 100% { transform: rotate(4deg); }
+    50%      { transform: rotate(-5deg); }
+  }
+  /* pelvic oar streamers trail and sway */
+  .fish .oar { transform-box: fill-box; transform-origin: top right; animation: oar-sway 4.2s ease-in-out infinite; }
+  .fish .oar.o2 { animation-delay: -2s; }
+  @keyframes oar-sway {
+    0%, 100% { transform: rotate(2.5deg); }
+    50%      { transform: rotate(-3deg); }
+  }
+  @media (max-width: 759px) {
+    /* no room beside the box: fish sits behind it, faint */
+    .fish { height: 62svh; top: 14svh; left: 8vw; opacity: 0.35; z-index: 2; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fish .fin-run, .fish .cray, .fish .oar { animation: none !important; }
+  }
+  .oarfish h2 {
+    font-family: "Archivo Black", sans-serif;
+    font-size: clamp(1.3rem, 4vw, 1.9rem);
+    letter-spacing: 0.01em;
+    color: #ececec;
+    text-shadow: 0 0 14px rgba(200, 200, 200, 0.30);
+    margin-bottom: 1.1rem;
+  }
+  .oarfish .fact {
+    margin-bottom: 0.95rem;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+  .oarfish.show .fact { opacity: 1; transform: translateY(0); }
+  .oarfish.show .fact:nth-child(2) { transition-delay: 0.55s; }
+  .oarfish.show .fact:nth-child(3) { transition-delay: 0.85s; }
+  .oarfish.show .fact:nth-child(4) { transition-delay: 1.15s; }
+  .oarfish.show .fact:nth-child(5) { transition-delay: 1.45s; }
+  .oarfish.show .fact:nth-child(6) { transition-delay: 1.75s; }
+  .oarfish h3 {
+    font-size: 0.78rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: #b8b8b8;
+    margin-bottom: 0.2rem;
+  }
+  .oarfish .fi { margin-right: 0.45em; }
+  .oarfish p {
+    font-size: clamp(0.78rem, 2.4vw, 0.86rem);
+    line-height: 1.55;
+    color: rgba(212, 212, 212, 0.85);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .oarfish .binner { animation: none !important; }
+    .oarfish, .oarfish .fact { transition-duration: 0.01s; }
+  }
+
+  ::selection { background: var(--ink); color: var(--white); }
+
+  /* z0 — what gets revealed under the fluid. Swap this canvas for a
+     <video autoplay muted loop playsinline> to use real footage;
+     nothing else changes. */
+  #bg {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+  }
+
+  /* z1 — WebGL fluid layer: draws NEPHI-on-white, goes transparent
+     where the fluid dye flows, revealing #bg underneath. */
+  #fluid {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+  }
+
+  /* fallback hero if WebGL is unavailable or reduced motion is on */
+  .hero-fallback {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    background: var(--white);
+  }
+  .hero-fallback h1 {
+    font-family: "Archivo Black", sans-serif;
+    font-size: clamp(4rem, 22vw, 24rem);
+    letter-spacing: -0.035em;
+    color: var(--ink);
+  }
+  body.no-fluid #fluid, body.no-fluid #bg { display: none; }
+  body.no-fluid .hero-fallback { display: flex; }
+
+  /* screen-reader heading, always present */
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    clip-path: inset(50%);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  /* z2 — chrome, difference-blended like the reference so it inverts
+     over whatever the fluid reveals */
+  .chrome {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    color: var(--white);
+    mix-blend-mode: difference;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+  }
+  .chrome .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+  }
+  .chrome a {
+    pointer-events: auto;
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+    padding-bottom: 0.1em;
+  }
+  .chrome a:hover { border-bottom-style: dashed; }
+  .chrome a:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 4px;
+    border-bottom-color: transparent;
+  }
+
+  @media (max-width: 600px) {
+    .chrome { font-size: 0.7rem; padding: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="bg" aria-hidden="true"></canvas>
+<canvas id="fluid" aria-hidden="true"></canvas>
+
+<div class="hero-fallback" aria-hidden="true"><h1>NEPHI</h1></div>
+<h1 class="sr-only">NEPHI</h1>
+
+<div class="scroll-space" aria-hidden="true"></div>
+
+<div class="fish" id="fish" aria-hidden="true">
+  <svg viewBox="-14 -22 176 706" width="100%" height="100%" overflow="visible" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="obody" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#4c5a68"/>
+        <stop offset="0.42" stop-color="#e3ecf3"/>
+        <stop offset="0.75" stop-color="#93a7b8"/>
+        <stop offset="1" stop-color="#3e4a57"/>
+      </linearGradient>
+      <linearGradient id="odepth" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#ffffff" stop-opacity="0.16"/>
+        <stop offset="0.5" stop-color="#000000" stop-opacity="0"/>
+        <stop offset="1" stop-color="#000000" stop-opacity="0.35"/>
+      </linearGradient>
+    </defs>
+    <!-- head crest: long streamers sweeping back over the head -->
+    <g class="crest">
+      <path class="cray" d="M78 26 C68 10 48 -2 20 -6" fill="none" stroke="#d84457" stroke-width="2.6" stroke-linecap="round"/>
+      <ellipse cx="20" cy="-6" rx="5.5" ry="3" fill="#d84457" transform="rotate(-18 20 -6)"/>
+      <path class="cray c2" d="M83 24 C79 6 66 -8 46 -14" fill="none" stroke="#d84457" stroke-width="2.4" stroke-linecap="round"/>
+      <ellipse cx="46" cy="-14" rx="4.6" ry="2.6" fill="#d84457" transform="rotate(-22 46 -14)"/>
+      <path class="cray c3" d="M89 24 C90 6 84 -8 70 -16" fill="none" stroke="#d84457" stroke-width="2.2" stroke-linecap="round"/>
+      <ellipse cx="70" cy="-16" rx="4" ry="2.3" fill="#d84457" transform="rotate(-30 70 -16)"/>
+    </g>
+    <!-- pelvic "oar" streamers -->
+    <g>
+      <path class="oar" d="M72 104 C56 150 42 220 34 310" fill="none" stroke="#d84457" stroke-width="2.4" stroke-linecap="round"/>
+      <ellipse class="oar-tip" cx="34" cy="312" rx="4.6" ry="8.5" fill="#d84457" transform="rotate(-12 34 312)"/>
+      <path class="oar o2" d="M76 110 C66 170 56 260 50 350" fill="none" stroke="#b03848" stroke-width="2" stroke-linecap="round"/>
+      <ellipse class="oar-tip" cx="50" cy="352" rx="4" ry="7" fill="#b03848" transform="rotate(-8 50 352)"/>
+    </g>
+    <!-- continuous dorsal fin: denser periodic frill scrolling behind a
+         clip, so the undulation travels down the whole fin -->
+    <clipPath id="finclip">
+      <polygon points="40,26 76,20 84,652 48,648"/>
+    </clipPath>
+    <g clip-path="url(#finclip)">
+      <path class="fin-run" fill="#c73e52" opacity="0.9" d="
+        M74 -90
+        Q52 -75 74 -60 Q52 -45 74 -30 Q52 -15 74 0
+        Q52 15 74 30 Q52 45 74 60 Q52 75 74 90
+        Q52 105 74 120 Q52 135 74 150 Q52 165 74 180
+        Q52 195 74 210 Q52 225 74 240 Q52 255 74 270
+        Q52 285 74 300 Q52 315 74 330 Q52 345 74 360
+        Q52 375 74 390 Q52 405 74 420 Q52 435 74 450
+        Q52 465 74 480 Q52 495 74 510 Q52 525 74 540
+        Q52 555 74 570 Q52 585 74 600 Q52 615 74 630
+        Q52 645 74 660 Q52 675 74 690 Q52 705 74 720
+        L92 720 L92 -90 Z"/>
+    </g>
+    <!-- ribbon body: thick, laterally compressed, blunt head up top -->
+    <path d="M80 18
+             C96 18 104 32 104 54
+             C104 88 102 150 99 220
+             C96 330 93 440 90 530
+             C89 585 88 625 87 656
+             L75 656
+             C73 615 71 560 70 500
+             C68 400 66 280 66 195
+             C66 120 66 68 69 44
+             C71 26 74 18 80 18 Z"
+          fill="url(#obody)" opacity="0.97"/>
+    <path d="M80 18
+             C96 18 104 32 104 54
+             C104 88 102 150 99 220
+             C96 330 93 440 90 530
+             C89 585 88 625 87 656
+             L75 656
+             C73 615 71 560 70 500
+             C68 400 66 280 66 195
+             C66 120 66 68 69 44
+             C71 26 74 18 80 18 Z"
+          fill="url(#odepth)"/>
+    <!-- dark flank blotches -->
+    <ellipse cx="86" cy="160" rx="5.5" ry="3" fill="#26292c" opacity="0.32"/>
+    <ellipse cx="83" cy="250" rx="4.6" ry="2.6" fill="#26292c" opacity="0.28"/>
+    <ellipse cx="84" cy="345" rx="5" ry="2.6" fill="#26292c" opacity="0.26"/>
+    <ellipse cx="81" cy="440" rx="4" ry="2.3" fill="#26292c" opacity="0.26"/>
+    <ellipse cx="81" cy="530" rx="3.6" ry="2" fill="#26292c" opacity="0.22"/>
+    <!-- lateral line -->
+    <path d="M88 80 C87 220 83 430 81 645" stroke="#3c4854" stroke-width="1.2" fill="none" opacity="0.45"/>
+    <!-- face: modest eye set into the head, subtle mouth -->
+    <circle cx="90" cy="46" r="4" fill="#11161b"/>
+    <circle cx="91.4" cy="44.6" r="1.2" fill="#dfe9f1"/>
+    <path d="M103 58 Q99 60 96 59" stroke="#31404d" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+  </svg>
+</div>
+
+<section class="oarfish" id="oarfish" aria-hidden="true">
+  <div class="binner">
+  <h2>The Giant Oarfish</h2>
+  <div class="fact">
+    <h3><span class="fi">❓</span>The mystery</h3>
+    <p>For most of human history we knew nothing about this animal. Not where it lived, not how it swam, not what it ate. It existed to us only as a rumor with a body count of zero witnesses.</p>
+  </div>
+  <div class="fact">
+    <h3><span class="fi">🌊</span>What washed up</h3>
+    <p>All we ever got were the dead. Every few years an impossible silver ribbon would roll up on some beach — and that was the entire fossil record of our knowledge. The living animal? Never seen.</p>
+  </div>
+  <div class="fact">
+    <h3><span class="fi">📸</span>Fifteen people</h3>
+    <p>In 1996, one came ashore in California so massive it took a whole line of Navy SEALs — around fifteen of them, shoulder to shoulder — just to hold it up for the photo. That picture went around the world. It was still all we had.</p>
+  </div>
+  <div class="fact">
+    <h3><span class="fi">🌀</span>So we made up stories</h3>
+    <p>When you can't explain a 30-foot sea serpent on the sand, you invent one. Sailors' serpent tales, messengers from the sea god's palace in Japanese legend, the "doomsday fish" that surfaces before earthquakes. The myths filled the space where the facts should have been.</p>
+  </div>
+  <div class="fact">
+    <h3><span class="fi">🎥</span>Even now</h3>
+    <p>A living oarfish wasn't filmed in the deep until 2001. A handful of sightings since — that's the whole catalogue. Nearly everything else about it is still a guess.</p>
+  </div>
+  </div>
+</section>
+
+<section class="oarfish photos" id="photos" aria-hidden="true">
+  <div class="binner">
+  <h2>The Ones That Washed Up</h2>
+  <figure>
+    <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Giant%20Oarfish.jpg?width=900" alt="A long line of Navy SEALs holding a giant oarfish carcass on a beach" />
+    <figcaption>Coronado, California, 1996. The one it took the whole line of Navy SEALs to hold.</figcaption>
+  </figure>
+  <figure>
+    <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Giant%20oarfish%20bermuda%20beach%201860.jpg?width=900" alt="Illustration of a giant oarfish washed ashore on a Bermuda beach in 1860" />
+    <figcaption>Bermuda, 1860. Reported then as a sea serpent — nobody had a better word for it.</figcaption>
+  </figure>
+  <figure>
+    <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Regalecus_glesne.jpg?width=900" alt="A giant oarfish specimen laid out full length" />
+    <figcaption>Regalecus glesne, laid out flat. The ribbon shape only makes sense once you see the whole thing.</figcaption>
+  </figure>
+  </div>
+</section>
+
+<div class="chrome" id="chrome">
+  <div class="row">
+    <span>NEPHI</span>
+    <span>EST. 2026</span>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   Layer 0 — revealed background (video stand-in).
+   Iridescent magenta/violet field on near-black, drawn on 2D
+   canvas so no footage is needed yet.
+   ============================================================ */
+(() => {
+  const canvas = document.getElementById("bg");
+  const ctx = canvas.getContext("2d");
+  let w, h;
+  function resize() {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    w = canvas.width = innerWidth * dpr;
+    h = canvas.height = innerHeight * dpr;
+  }
+  resize();
+  addEventListener("resize", resize);
+
+  /* The ink field the letters open onto: neon green running dark to
+     light, always in motion so the reveal is unmistakable. */
+  const blobs = [
+    // blazing neon body (#39FF14 territory) — the dominant light end
+    { c: [120, 255, 60], r: 0.68, sx: 0.13, sy: 0.10, px: 0.0, py: 2.1, amp: 0.30, a: 1.0 },
+    // white-hot core
+    { c: [225, 255, 190], r: 0.22, sx: 0.13, sy: 0.10, px: 0.35, py: 2.5, amp: 0.30, a: 1.0 },
+    // electric green falling toward the dark end
+    { c: [57, 230, 40], r: 0.36, sx: 0.07, sy: 0.16, px: 3.9, py: 0.6, amp: 0.42, a: 0.9 },
+  ];
+
+
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function draw(t) {
+    ctx.fillStyle = "#1e9634";
+    ctx.fillRect(0, 0, w, h);
+    for (const b of blobs) {
+      const cx = w * (0.5 + b.amp * Math.sin(t * b.sx + b.px));
+      const cy = h * (0.5 + b.amp * 0.7 * Math.cos(t * b.sy + b.py));
+      const r = Math.min(w, h) * b.r * (1 + 0.18 * Math.sin(t * 0.23 + b.px));
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, `rgba(${b.c[0]},${b.c[1]},${b.c[2]},${b.a})`);
+      g.addColorStop(0.55, `rgba(${b.c[0]},${b.c[1]},${b.c[2]},${b.a * 0.45})`);
+      g.addColorStop(1, `rgba(${b.c[0]},${b.c[1]},${b.c[2]},0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  draw(6);
+  if (!reduce) {
+    (function loop(ts) {
+      draw(ts / 1000 + 6);
+      requestAnimationFrame(loop);
+    })(0);
+  }
+})();
+
+/* ============================================================
+   Layer 1 — GPU fluid simulation mask (the noth.in effect).
+   Navier-Stokes solve on small FBOs; the dye field cuts a
+   transparent hole through a baked NEPHI-on-white texture.
+   Parameters mirror noth.in's: velocityDissipation .962,
+   dyeDissipation .988, 20 pressure iterations, splatForce 5900,
+   edge smoothstep(.5, .51).
+   ============================================================ */
+(() => {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const canvas = document.getElementById("fluid");
+  const gl = canvas.getContext("webgl2", { alpha: true, premultipliedAlpha: false });
+  if (!gl || !gl.getExtension("EXT_color_buffer_float") || reduce) {
+    document.body.classList.add("no-fluid");
+    return;
+  }
+
+  const S = {
+    simRes: 256, dyeRes: 512,
+    velDissipation: 0.991, dyeDissipation: 0.9965, dyeDissipationBg: 0.993,
+    pressureIters: 20, splatForce: 8200, splatRadius: 0.0006,
+    splatRadiusBg: 0.0011, // tighter brush; the moving fluid does the spreading
+    dyeAmount: 4.5,
+    edgeSoftness: 0.5, edgeWidth: 0.01,
+  };
+
+  /* ---------- GL plumbing ---------- */
+  const VERT = `
+    attribute vec2 aPos; varying vec2 vUv;
+    void main(){ vUv = aPos*0.5+0.5; gl_Position = vec4(aPos,0.,1.); }`;
+
+  function compile(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+      throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  }
+  function program(fragSrc) {
+    const p = gl.createProgram();
+    gl.attachShader(p, compile(gl.VERTEX_SHADER, VERT));
+    gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fragSrc));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS))
+      throw new Error(gl.getProgramInfoLog(p));
+    const u = {};
+    const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++) {
+      const info = gl.getActiveUniform(p, i);
+      u[info.name] = gl.getUniformLocation(p, info.name);
+    }
+    return { p, u };
+  }
+
+  const quad = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  function blit(target) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.fbo : null);
+    gl.viewport(0, 0, target ? target.w : canvas.width, target ? target.h : canvas.height);
+    gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  function createRT(w, h) {
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+    const fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
+    return { tex, fbo, w, h };
+  }
+  function doubleFBO(w, h) {
+    return { read: createRT(w, h), write: createRT(w, h),
+      swap() { const t = this.read; this.read = this.write; this.write = t; } };
+  }
+
+  /* ---------- shaders ---------- */
+  const P = "precision highp float; varying vec2 vUv;";
+  const splatProg = program(`${P}
+    uniform sampler2D uTarget; uniform float uAspect;
+    uniform vec3 uColor; uniform vec2 uPoint; uniform float uRadius;
+    void main(){
+      vec2 p = vUv - uPoint; p.x *= uAspect;
+      vec3 splat = exp(-dot(p,p)/uRadius) * uColor;
+      gl_FragColor = vec4(texture2D(uTarget, vUv).xyz + splat, 1.0);
+    }`);
+  const dyeSplatProg = program(`${P}
+    uniform sampler2D uTarget; uniform float uAspect;
+    uniform vec2 uPoint; uniform vec2 uRadii; uniform vec2 uAmounts;
+    void main(){
+      vec2 p = vUv - uPoint; p.x *= uAspect;
+      float d = dot(p,p);
+      vec4 base = texture2D(uTarget, vUv);
+      base.r += exp(-d/uRadii.x) * uAmounts.x;
+      base.g += exp(-d/uRadii.y) * uAmounts.y;
+      gl_FragColor = vec4(base.rgb, 1.0);
+    }`);
+  const advectProg = program(`${P}
+    uniform sampler2D uVelocity, uSource; uniform vec2 uTexel;
+    uniform float uDt; uniform vec4 uDissipation;
+    void main(){
+      vec2 coord = vUv - uDt * texture2D(uVelocity, vUv).xy * uTexel;
+      gl_FragColor = uDissipation * texture2D(uSource, coord);
+    }`);
+  const divergeProg = program(`${P}
+    uniform sampler2D uVelocity; uniform vec2 uTexel;
+    void main(){
+      float L = texture2D(uVelocity, vUv - vec2(uTexel.x, 0.)).x;
+      float R = texture2D(uVelocity, vUv + vec2(uTexel.x, 0.)).x;
+      float B = texture2D(uVelocity, vUv - vec2(0., uTexel.y)).y;
+      float T = texture2D(uVelocity, vUv + vec2(0., uTexel.y)).y;
+      gl_FragColor = vec4(0.5*(R-L+T-B), 0., 0., 1.);
+    }`);
+  const pressureProg = program(`${P}
+    uniform sampler2D uPressure, uDivergence; uniform vec2 uTexel;
+    void main(){
+      float L = texture2D(uPressure, vUv - vec2(uTexel.x, 0.)).x;
+      float R = texture2D(uPressure, vUv + vec2(uTexel.x, 0.)).x;
+      float B = texture2D(uPressure, vUv - vec2(0., uTexel.y)).x;
+      float T = texture2D(uPressure, vUv + vec2(0., uTexel.y)).x;
+      float div = texture2D(uDivergence, vUv).x;
+      gl_FragColor = vec4((L+R+B+T-div)*0.25, 0., 0., 1.);
+    }`);
+  const gradientProg = program(`${P}
+    uniform sampler2D uPressure, uVelocity; uniform vec2 uTexel;
+    void main(){
+      float L = texture2D(uPressure, vUv - vec2(uTexel.x, 0.)).x;
+      float R = texture2D(uPressure, vUv + vec2(uTexel.x, 0.)).x;
+      float B = texture2D(uPressure, vUv - vec2(0., uTexel.y)).x;
+      float T = texture2D(uPressure, vUv + vec2(0., uTexel.y)).x;
+      vec2 vel = texture2D(uVelocity, vUv).xy - 0.5*vec2(R-L, T-B);
+      gl_FragColor = vec4(vel, 0., 1.);
+    }`);
+  const displayProg = program(`${P}
+    uniform sampler2D uBase, uDye, uGlow, uSecret;
+    uniform float uEdgeSoftness, uEdgeWidth, uFlood, uTime, uAspect;
+    uniform vec4 uClicks[8]; // x,y: point (uv), z: age (s), w: strength (1=click, ~0.3=move)
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float vnoise(vec2 p){
+      vec2 i = floor(p), f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(hash(i), hash(i + vec2(1.,0.)), f.x),
+                 mix(hash(i + vec2(0.,1.)), hash(i + vec2(1.,1.)), f.x), f.y);
+    }
+    void main(){
+      vec2 dye = texture2D(uDye, vUv).rg;
+      // letters open fully at low dye density so no black patches
+      // survive inside the green while the ink builds or fades
+      float mask = smoothstep(0.18, 0.32, dye.r);
+      vec4 base = texture2D(uBase, vUv);
+      float glyph = 1.0 - smoothstep(0.35, 0.65, dot(base.rgb, vec3(0.3333)));
+      // hidden word: invisible at rest, behaves like a glyph under ink
+      glyph = max(glyph, smoothstep(0.35, 0.65, texture2D(uSecret, vUv).r));
+      // g channel decays faster, so the background trail heals sooner
+      // than the ink lingering inside the letters
+      float maskBg = smoothstep(uEdgeSoftness, uEdgeSoftness + uEdgeWidth, dye.g);
+      vec3 inked = mix(vec3(0.043), base.rgb, glyph); // page -> black, glyph unchanged
+      vec3 color = mix(base.rgb, inked, max(mask * glyph, maskBg));
+      // neon glow pouring off the letters — but only onto background
+      // that the cursor has blackened, never onto the white page
+      float halo = pow(texture2D(uGlow, vUv).r, 1.3) * mask * (1.0 - glyph) * maskBg;
+      color = mix(color, vec3(0.55, 1.0, 0.25), min(halo * 2.4, 1.0));
+      float alpha = 1.0 - mask * glyph;               // glyph -> see-through to ink
+      // scroll flood: black water rising from the bottom to 98%.
+      // Still at rest; clicks send a real impulse through the surface:
+      // a localized wave packet that travels outward and dies, not a
+      // standing ring pattern.
+      float level = uFlood * 1.0 - 0.02;
+      float surface = level;
+      for (int q = 0; q < 8; q++) {
+        vec4 C = uClicks[q];
+        if (C.z >= 0.0 && C.z < 2.0) {
+          float ad = abs(vUv.x - C.x);
+          float depthFactor = exp(-abs(C.y - level) * 5.0); // deep clicks barely stir the top
+          float packet = exp(-pow((ad - C.z * 0.22) / 0.045, 2.0)); // outward-moving group
+          float osc = cos(ad * 70.0 - C.z * 9.0);
+          surface += 0.018 * C.w * packet * osc * depthFactor * exp(-C.z * 1.5) * exp(-ad * 2.5);
+        }
+      }
+      float flood = smoothstep(surface + 0.0015, surface - 0.0015, vUv.y);
+      // depth: water lightens faintly toward the surface, black below
+      vec3 waterCol = mix(vec3(0.055), vec3(0.02), clamp((surface - vUv.y) / 0.18, 0.0, 1.0));
+      color = mix(color, waterCol, flood);
+      alpha = mix(alpha, 1.0, flood);
+      // near full fill the sky above the water goes black too, and the
+      // waterline is drawn as a soft grey seam so it stays visible
+      float aboveDark = smoothstep(0.75, 0.97, uFlood) * (1.0 - flood);
+      color = mix(color, vec3(0.02), aboveDark);
+      alpha = mix(alpha, 1.0, max(aboveDark, 0.0));
+      float seam = exp(-pow((vUv.y - surface) / 0.0035, 2.0)) * smoothstep(0.55, 0.9, uFlood);
+      color = mix(color, vec3(0.42), seam * 0.85);
+      alpha = max(alpha, seam);
+      // very subtle grey ripple rings expanding from any true click
+      for (int q = 0; q < 8; q++) {
+        vec4 C = uClicks[q];
+        if (C.z >= 0.0 && C.z < 2.0 && C.w > 0.8) {
+          vec2 dvc = (vUv - C.xy) * vec2(uAspect, 1.0);
+          float rr = length(dvc);
+          float ring = exp(-pow((rr - C.z * 0.34) / 0.016, 2.0))
+                     + 0.5 * exp(-pow((rr - C.z * 0.22) / 0.014, 2.0));
+          color = mix(color, vec3(0.38), min(ring, 1.0) * 0.09 * exp(-C.z * 1.6) * flood);
+        }
+      }
+      // bubbles: from half-full onward, random bubbles rise through
+      // the black water and pop at the surface
+      float bubbleOn = smoothstep(0.45, 0.55, uFlood);
+      if (bubbleOn > 0.0 && flood > 0.5) {
+        // sparse, subtle: one layer of wide columns, most of them empty.
+        // Each pixel checks its own column AND both neighbours, so a
+        // shoved bubble crossing a column border never gets sliced.
+        float cw = 0.16;
+        float bub = 0.0;
+        for (int cc = -1; cc <= 1; cc++) {
+          float ci = floor(vUv.x / cw) + float(cc);
+          float rnd = hash(vec2(ci * 1.7, 7.3));
+          if (rnd > 0.45) { // ~half the columns carry a bubble
+            float spd = 0.05 + rnd * 0.07;
+            float yb = fract(uTime * spd + rnd * 9.7) * max(surface, 0.0);
+            float rb = (0.005 + rnd * 0.008) * (0.6 + yb);  // grow as they rise
+            float margin = rb / uAspect + 0.012;
+            float xb = (ci + 0.5) * cw
+                     + (rnd - 0.5) * (cw - 2.0 * margin)
+                     + 0.006 * sin(uTime * 2.2 + rnd * 31.0); // wobble
+            // clicks shove nearby bubbles away; the shove decays and
+            // the bubble drifts back to its path
+            vec2 bpos = vec2(xb, yb);
+            for (int q = 0; q < 8; q++) {
+              vec4 C = uClicks[q];
+              if (C.z >= 0.0 && C.z < 2.0 && C.w > 0.8) {
+                vec2 away = (bpos - C.xy) * vec2(uAspect, 1.0);
+                float dist = max(length(away), 0.02);
+                float push = 0.09 * exp(-dist * dist * 22.0) * exp(-C.z * 2.8);
+                bpos += (away / dist) * push;
+              }
+            }
+            vec2 d = (vUv - bpos) * vec2(uAspect, 1.0);
+            float dist = length(d);
+            // hollow bubble: a thin outline, empty inside
+            bub += smoothstep(rb, rb * 0.88, dist)
+                 - smoothstep(rb * 0.72, rb * 0.60, dist);
+          }
+        }
+        color = mix(color, vec3(0.30), min(bub, 1.0) * bubbleOn * flood);
+      }
+      gl_FragColor = vec4(color, alpha);
+    }`);
+
+  /* ---------- state ---------- */
+  let velocity, pressure, divergence, dye;
+  function initSim() {
+    velocity = doubleFBO(S.simRes, S.simRes);
+    pressure = doubleFBO(S.simRes, S.simRes);
+    divergence = createRT(S.simRes, S.simRes);
+    dye = doubleFBO(S.dyeRes, S.dyeRes);
+  }
+  initSim();
+
+  /* base texture: NEPHI wordmark baked on white */
+  const baseTex = gl.createTexture();
+  const glowTex = gl.createTexture();
+  const secretTex = gl.createTexture();
+  function uploadTex(tex, src) {
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
+  function bakeBase() {
+    const c = document.createElement("canvas");
+    c.width = canvas.width; c.height = canvas.height;
+    const x = c.getContext("2d");
+    x.fillStyle = "#fefefe";
+    x.fillRect(0, 0, c.width, c.height);
+    const size = Math.min(c.width * 0.205, c.height * 0.75);
+    x.font = `${size}px "Archivo Black", sans-serif`;
+    x.fillStyle = "#0b0b0b";
+    x.textAlign = "center";
+    x.textBaseline = "middle";
+    const cx = c.width / 2, cy = c.height / 2 + size * 0.04;
+    const prev = x.canvas.style.letterSpacing;
+    x.canvas.style.letterSpacing = `-${size * 0.035}px`;
+    x.font = `${size}px "Archivo Black", sans-serif`;
+    x.fillText("NEPHI", cx, cy);
+    x.canvas.style.letterSpacing = prev;
+    uploadTex(baseTex, c);
+
+    // glow map: the same wordmark, heavily blurred — the halo shape
+    const g = document.createElement("canvas");
+    g.width = c.width; g.height = c.height;
+    const gx = g.getContext("2d");
+    gx.fillStyle = "#000";
+    gx.fillRect(0, 0, g.width, g.height);
+    gx.filter = `blur(${Math.round(size * 0.06)}px)`;
+    gx.font = `${size}px "Archivo Black", sans-serif`;
+    gx.fillStyle = "#fff";
+    gx.textAlign = "center";
+    gx.textBaseline = "middle";
+    gx.fillText("NEPHI", cx, cy);
+    gx.filter = "none";
+    uploadTex(glowTex, g);
+
+    // hidden word mask: bottom-right, script face, white-on-black —
+    // invisible on the page until the fluid opens it onto the ink
+    const s = document.createElement("canvas");
+    s.width = c.width; s.height = c.height;
+    const sx = s.getContext("2d");
+    sx.fillStyle = "#000";
+    sx.fillRect(0, 0, s.width, s.height);
+    sx.font = `${size * 0.30}px "Pinyon Script", cursive`;
+    sx.fillStyle = "#fff";
+    sx.textAlign = "right";
+    sx.textBaseline = "alphabetic";
+    sx.fillText("Fuck you", s.width * 0.94, s.height * 0.92);
+    uploadTex(secretTex, s);
+  }
+
+  let ready = false; // guards render() until all state below exists
+  function resize() {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    canvas.width = innerWidth * dpr;
+    canvas.height = innerHeight * dpr;
+    bakeBase();
+    if (ready) render(); // repaint immediately, no blank frame
+  }
+  resize();
+  addEventListener("resize", resize);
+  if (document.fonts) {
+    // Pinyon Script is canvas-only, so force-load it before rebaking
+    Promise.all([
+      document.fonts.load('100px "Archivo Black"'),
+      document.fonts.load('100px "Pinyon Script"'),
+      document.fonts.ready,
+    ]).then(() => { bakeBase(); if (ready) render(); });
+  }
+
+  /* ---------- pointer & splats ---------- */
+  const mouse = { x: 0.5, y: 0.5, px: 0.5, py: 0.5, moved: false, lastReal: 0 };
+  const clicks = [];
+  let lastStir = 0;
+  function waterLevel() {
+    const y = window.__smoothY ?? scrollY;
+    const flood = Math.min(Math.max(y / innerHeight, 0), 1);
+    return flood * 0.92 - 0.04;
+  }
+  function onMove(cx, cy) {
+    mouse.x = cx / innerWidth;
+    mouse.y = 1 - cy / innerHeight;
+    mouse.moved = true;
+    mouse.lastReal = performance.now();
+    // moving the cursor stirs slight ripples into the surface
+    if (waterLevel() > 0.03) {
+      const now = performance.now();
+      if (now - lastStir > 130) {
+        lastStir = now;
+        clicks.push({ x: mouse.x, y: mouse.y, born: now, s: 0.3 });
+        if (clicks.length > 8) clicks.shift();
+      }
+    }
+  }
+  // a click lands a real impulse: surface wave + grey rings + bubble shove
+  addEventListener("pointerdown", (e) => {
+    if (waterLevel() > 0.03) {
+      clicks.push({ x: e.clientX / innerWidth, y: 1 - e.clientY / innerHeight, born: performance.now(), s: 1 });
+      if (clicks.length > 8) clicks.shift();
+    }
+  }, { passive: true });
+  addEventListener("mousemove", e => onMove(e.clientX, e.clientY), { passive: true });
+  addEventListener("touchmove", e => {
+    if (e.touches.length) onMove(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+
+  function splat(x, y, dx, dy, amount) {
+    const aspect = canvas.width / canvas.height;
+    gl.useProgram(splatProg.p);
+    gl.uniform1f(splatProg.u.uAspect, aspect);
+    gl.uniform2f(splatProg.u.uPoint, x, y);
+    gl.uniform1f(splatProg.u.uRadius, S.splatRadius);
+    // velocity splat
+    gl.uniform3f(splatProg.u.uColor, dx * S.splatForce, dy * S.splatForce, 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, velocity.read.tex);
+    gl.uniform1i(splatProg.u.uTarget, 0);
+    blit(velocity.write); velocity.swap();
+    // dye splats: r feeds the letter ink, g the (broader) background
+    // trail. Each event lands as a scattered burst — a jittered main
+    // drop plus stray satellite droplets — rather than a steady blob
+    // glued to the cursor. The fluid's velocity then carries every
+    // drop onward (inertia), smearing them into the flow.
+    const dyeDrop = (px, py, rMul, aMul, bgMul) => {
+      gl.useProgram(dyeSplatProg.p);
+      gl.uniform1f(dyeSplatProg.u.uAspect, aspect);
+      gl.uniform2f(dyeSplatProg.u.uPoint, px, py);
+      gl.uniform2f(dyeSplatProg.u.uRadii,
+        S.splatRadius * rMul,
+        S.splatRadiusBg * rMul * (0.35 + Math.random() * 1.6));
+      gl.uniform2f(dyeSplatProg.u.uAmounts, amount * aMul, amount * aMul * bgMul);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, dye.read.tex);
+      gl.uniform1i(dyeSplatProg.u.uTarget, 0);
+      blit(dye.write); dye.swap();
+    };
+    const speed = Math.min(Math.hypot(dx, dy) * 40, 1);
+    const jit = 0.006 + speed * 0.02;
+    // main drop, jittered off the cursor
+    const bgKick = Math.random() < 0.3 ? 0 : 0.3 + Math.random() * 1.5;
+    dyeDrop(x + (Math.random() - 0.5) * jit * 2, y + (Math.random() - 0.5) * jit * 2,
+      0.5 + Math.random(), 0.7 + Math.random() * 0.6, bgKick);
+    // stray droplets flung outward, more when moving fast
+    const strays = Math.random() < 0.25 + speed * 0.5 ? 1 + (Math.random() * 2 | 0) : 0;
+    for (let i = 0; i < strays; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const dist = jit * (1.5 + Math.random() * 3.5);
+      dyeDrop(x + Math.cos(ang) * dist, y + Math.sin(ang) * dist,
+        0.15 + Math.random() * 0.45, 0.4 + Math.random() * 0.5,
+        Math.random() < 0.5 ? 0 : 0.5 + Math.random());
+    }
+  }
+
+  /* ---------- frame loop ---------- */
+  const simTexel = [1 / S.simRes, 1 / S.simRes];
+  const dyeTexel = [1 / S.dyeRes, 1 / S.dyeRes];
+
+  function step(dt) {
+    gl.disable(gl.BLEND);
+
+    // advect velocity
+    gl.useProgram(advectProg.p);
+    gl.uniform2f(advectProg.u.uTexel, simTexel[0], simTexel[1]);
+    gl.uniform1f(advectProg.u.uDt, dt);
+    const v = S.velDissipation;
+    gl.uniform4f(advectProg.u.uDissipation, v, v, v, v);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, velocity.read.tex);
+    gl.uniform1i(advectProg.u.uVelocity, 0);
+    gl.uniform1i(advectProg.u.uSource, 0);
+    blit(velocity.write); velocity.swap();
+
+    // advect dye: r = in-letter ink (lingers), g = background trail (fades fast)
+    gl.uniform4f(advectProg.u.uDissipation, S.dyeDissipation, S.dyeDissipationBg, 1, 1);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, velocity.read.tex);
+    gl.uniform1i(advectProg.u.uVelocity, 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, dye.read.tex);
+    gl.uniform1i(advectProg.u.uSource, 1);
+    blit(dye.write); dye.swap();
+
+    // divergence
+    gl.useProgram(divergeProg.p);
+    gl.uniform2f(divergeProg.u.uTexel, simTexel[0], simTexel[1]);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, velocity.read.tex);
+    gl.uniform1i(divergeProg.u.uVelocity, 0);
+    blit(divergence);
+
+    // pressure solve
+    gl.useProgram(pressureProg.p);
+    gl.uniform2f(pressureProg.u.uTexel, simTexel[0], simTexel[1]);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, divergence.tex);
+    gl.uniform1i(pressureProg.u.uDivergence, 1);
+    for (let i = 0; i < S.pressureIters; i++) {
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, pressure.read.tex);
+      gl.uniform1i(pressureProg.u.uPressure, 0);
+      blit(pressure.write); pressure.swap();
+    }
+
+    // subtract gradient
+    gl.useProgram(gradientProg.p);
+    gl.uniform2f(gradientProg.u.uTexel, simTexel[0], simTexel[1]);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, pressure.read.tex);
+    gl.uniform1i(gradientProg.u.uPressure, 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, velocity.read.tex);
+    gl.uniform1i(gradientProg.u.uVelocity, 1);
+    blit(velocity.write); velocity.swap();
+  }
+
+  let sY = scrollY; // smoothed scroll: everything scroll-driven reads this
+  function render() {
+    sY += (scrollY - sY) * 0.11;
+    if (Math.abs(scrollY - sY) < 0.5) sY = scrollY;
+    window.__smoothY = sY;
+    if (window.__oarfishUpdate) window.__oarfishUpdate();
+    const flood = Math.min(Math.max(sY / innerHeight, 0), 1);
+    const chromeEl = document.getElementById("chrome");
+    if (chromeEl) chromeEl.style.opacity = String(1 - flood);
+    gl.useProgram(displayProg.p);
+    gl.uniform1f(displayProg.u.uFlood, flood);
+    gl.uniform1f(displayProg.u.uTime, performance.now() / 1000);
+    gl.uniform1f(displayProg.u.uAspect, canvas.width / canvas.height);
+    // impulses: clicks (strength 1) and cursor stirs (strength 0.3)
+    const now = performance.now();
+    const cArr = new Float32Array(32).fill(-1); // age -1 = inactive slot
+    let ci = 0;
+    for (const k of clicks) {
+      const age = (now - k.born) / 1000;
+      if (age > 2 || ci >= 8) continue;
+      cArr[ci*4] = k.x; cArr[ci*4+1] = k.y; cArr[ci*4+2] = age; cArr[ci*4+3] = k.s;
+      ci++;
+    }
+    gl.uniform4fv(displayProg.u["uClicks[0]"], cArr);
+    gl.uniform1f(displayProg.u.uEdgeSoftness, S.edgeSoftness);
+    gl.uniform1f(displayProg.u.uEdgeWidth, S.edgeWidth);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, baseTex);
+    gl.uniform1i(displayProg.u.uBase, 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, dye.read.tex);
+    gl.uniform1i(displayProg.u.uDye, 1);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, glowTex);
+    gl.uniform1i(displayProg.u.uGlow, 2);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, secretTex);
+    gl.uniform1i(displayProg.u.uSecret, 3);
+    blit(null);
+  }
+
+  let last = performance.now();
+  let ticked = false;
+  function frame(now) {
+    ticked = true;
+    window.__fluidFrames = (window.__fluidFrames || 0) + 1;
+    const dt = Math.min((now - last) / 1000, 1 / 30);
+    last = now;
+
+    if (mouse.moved) {
+      const dx = mouse.x - mouse.px, dy = mouse.y - mouse.py;
+      const speed = Math.abs(dx) + Math.abs(dy);
+      if (speed > 0) {
+        // main splat, thrown off the cursor with wildly varying force
+        const j = 0.012;
+        splat(
+          mouse.x + (Math.random() - 0.5) * j,
+          mouse.y + (Math.random() - 0.5) * j,
+          dx * (0.4 + Math.random() * 2.4),
+          dy * (0.4 + Math.random() * 2.4),
+          S.dyeAmount
+        );
+        // satellites: fast strokes fling ink hard in random directions
+        if (speed > 0.003 && Math.random() < 0.65) {
+          const a = Math.random() * Math.PI * 2, d = 0.01 + Math.random() * 0.05;
+          const kick = speed * (1.5 + Math.random() * 3.5);
+          splat(
+            mouse.x + Math.cos(a) * d,
+            mouse.y + Math.sin(a) * d,
+            Math.cos(a) * kick + dx * (Math.random() * 2.0 - 0.5),
+            Math.sin(a) * kick + dy * (Math.random() * 2.0 - 0.5),
+            S.dyeAmount * (0.3 + Math.random() * 0.6)
+          );
+        }
+      }
+      mouse.moved = false;
+    }
+    mouse.px = mouse.x; mouse.py = mouse.y;
+
+    step(dt);
+    render();
+    requestAnimationFrame(frame);
+  }
+  ready = true;
+  render(); // first paint: wordmark visible immediately
+  window.__fluidTick = frame;
+  window.__fluidProbe = (fx, fy) => {
+    const out = {};
+    for (const [name, rt] of [["dye", dye.read], ["vel", velocity.read]]) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, rt.fbo);
+      out[name + "Status"] = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+      const px = new Float32Array(4);
+      gl.readPixels(Math.floor(rt.w * fx), Math.floor(rt.h * fy), 1, 1, gl.RGBA, gl.FLOAT, px);
+      out[name] = [...px];
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    out.err = gl.getError();
+    return out;
+  };
+  requestAnimationFrame(frame);
+  // watchdog: some embedded/headless viewers never fire rAF while
+  // still reporting the page visible — drive the loop manually there
+  setTimeout(() => {
+    if (!ticked && document.visibilityState === "visible") {
+      (function tick() { frame(performance.now()); setTimeout(tick, 16); })();
+    }
+  }, 600);
+})();
+</script>
+
+<script>
+/* Oarfish box: appears when the water fill completes — driven by the
+   same scroll-progress value as the flood shader, not a pixel offset. */
+(() => {
+  const box = document.getElementById("oarfish");
+  const photos = document.getElementById("photos");
+  const fish = document.getElementById("fish");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let shown = false, photosShown = false, p2s = 0;
+  const sstep = (t) => { t = Math.min(Math.max(t, 0), 1); return t * t * (3 - 2 * t); };
+  function update() {
+    const y = window.__smoothY ?? scrollY;
+    const yv = y / innerHeight; // scroll progress in viewports
+    const flood = Math.min(Math.max(yv, 0), 1);
+    const full = flood >= 0.98;
+    if (full !== shown) {
+      shown = full;
+      box.classList.toggle("show", full); // triggers the fact stagger
+      box.setAttribute("aria-hidden", String(!full));
+      fish.setAttribute("aria-hidden", String(!full));
+    }
+    // Both boxes are position-locked to the same smoothed scroll the
+    // water uses, so they ride up AND down with the waterline.
+    // Info box: rises over the last stretch of the fill, then phase-2
+    // scroll lifts it up and away.
+    const pIn = sstep((yv - 0.86) / 0.14);
+    const p2 = sstep((yv - 1.4) / 0.9);
+    p2s = p2; // yv is already smoothed; no second lerp needed
+    const boxOff = (1 - pIn) * 75 - p2s * 130; // vh from center
+    box.style.transform = `translate(-50%, calc(-50% + ${boxOff.toFixed(2)}vh))`;
+    box.style.opacity = String(Math.max(0, Math.min(1, pIn - p2s * 1.6)));
+    // Photo box: surfaces on the deeper stretch of scroll
+    const pPh = sstep((yv - 1.9) / 0.5);
+    const phOff = (1 - pPh) * 75;
+    photos.style.transform = `translate(-50%, calc(-50% + ${phOff.toFixed(2)}vh))`;
+    photos.style.opacity = String(pPh);
+    const showPhotos = pPh >= 0.5;
+    if (showPhotos !== photosShown) {
+      photosShown = showPhotos;
+      photos.classList.toggle("show", showPhotos);
+      photos.setAttribute("aria-hidden", String(!showPhotos));
+    }
+  }
+  // clicking either box dunks it: a quick bob, and the click still
+  // reaches the water underneath for the splash rings
+  for (const el of [box, photos]) {
+    el.addEventListener("pointerdown", () => {
+      const inner = el.querySelector(".binner");
+      inner.classList.remove("bump");
+      void inner.offsetWidth; // restart the animation
+      inner.classList.add("bump");
+    });
+    el.querySelector(".binner").addEventListener("animationend", (e) => {
+      if (e.animationName === "box-bump") e.target.classList.remove("bump");
+    });
+  }
+  addEventListener("scroll", update, { passive: true });
+  addEventListener("resize", update, { passive: true });
+  window.__oarfishUpdate = update; // also polled by the fluid render loop
+  update();
+
+  /* The oarfish rises with the water: its height tracks the same
+     scroll progress, lerped each frame so it glides instead of
+     tracking the scroll wheel 1:1. Scrolling back up sinks it. */
+  let cur = 112; // vh offset below resting position
+  function fishFrame(ts) {
+    const y = window.__smoothY ?? scrollY;
+    const flood = Math.min(Math.max(y / innerHeight, 0), 1);
+    // starts surfacing once the water is half up; rests at flood = 1
+    const p = Math.min(Math.max((flood - 0.5) / 0.5, 0), 1);
+    const eased = p * p * (3 - 2 * p); // smoothstep
+    const target = (1 - eased) * 112;
+    cur += (target - cur) * 0.06;
+    if (Math.abs(target - cur) < 0.01) cur = target;
+    if (reduce) {
+      fish.style.transform = `translateY(${target}vh)`;
+    } else {
+      const bob = Math.sin(ts * 0.0006) * 9;               // slow vertical drift
+      const sway = Math.sin(ts * 0.00034 + 1.2) * 1.1;     // faint whole-body tilt
+      fish.style.transform = `translateY(calc(${cur}vh + ${bob}px)) rotate(${sway}deg)`;
+    }
+    requestAnimationFrame(fishFrame);
+  }
+  window.__fishFrame = fishFrame; // debug hook (rAF-less environments)
+  requestAnimationFrame(fishFrame);
+})();
+</script>
+
+</body>
+</html>
