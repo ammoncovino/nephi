@@ -1,0 +1,270 @@
+:root {
+  --white: #fefefe;
+  --ink: #0b0b0b;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  background: var(--white);
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: "IBM Plex Mono", monospace;
+  color: var(--ink);
+  overflow-x: hidden;
+}
+/* hide scrollbar, like the reference */
+body::-webkit-scrollbar { display: none; }
+html { scrollbar-width: none; }
+/* scroll runway: one viewport of travel floods the page with ink */
+.scroll-space { height: 350vh; }
+
+/* ---- oarfish info box: surfaces when the water fill completes ---- */
+.oarfish {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 3;
+  width: min(560px, 92vw);
+  max-height: 86svh;
+  overflow-y: auto;
+  padding: clamp(1.1rem, 3vw, 2rem);
+  border-radius: 18px;
+  background: rgba(20, 20, 22, 0.55);
+  backdrop-filter: blur(9px);
+  -webkit-backdrop-filter: blur(9px);
+  border: 1px solid rgba(200, 200, 200, 0.22);
+  box-shadow:
+    0 0 24px rgba(180, 180, 180, 0.10),
+    inset 0 0 18px rgba(180, 180, 180, 0.05);
+  color: #d4d4d4;
+  --lift: 0vh; /* phase-2 scroll pushes the box up and away */
+  pointer-events: auto; /* clickable: a tap bobs it in the water */
+  cursor: pointer;
+  opacity: 0;
+  /* position and opacity are driven per-frame by JS from the same
+     smoothed scroll value as the water, so the box rises and sinks
+     in lockstep with the waterline — no fire-and-forget animations */
+  transform: translate(-50%, 75vh);
+}
+@media (min-width: 760px) {
+  .oarfish { left: 62%; } /* room for the oarfish on the left */
+}
+/* inner wrapper carries the idle bob and the click-bump, so they
+   stack cleanly on top of the JS-driven position of the box itself */
+.oarfish .binner { animation: box-bob 7s ease-in-out infinite; }
+@keyframes box-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-9px); }
+}
+.oarfish .binner.bump {
+  animation:
+    box-bob 7s ease-in-out infinite,
+    box-bump 1.1s cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+@keyframes box-bump {
+  0%   { transform: translateY(0); }
+  22%  { transform: translateY(16px); }
+  55%  { transform: translateY(-11px); }
+  80%  { transform: translateY(5px); }
+  100% { transform: translateY(0); }
+}
+/* photo box shares the info box shell, but never scrolls internally:
+   images are height-capped and cropped so everything fits at once */
+.oarfish.photos { overflow: hidden; max-height: none; }
+.oarfish.photos figure { margin: 0 0 0.8rem; }
+.oarfish.photos figure:last-child { margin-bottom: 0; }
+.oarfish.photos img {
+  width: 100%;
+  max-height: 16svh;
+  object-fit: cover;
+  display: block;
+  border-radius: 10px;
+  border: 1px solid rgba(200, 200, 200, 0.14);
+  filter: saturate(0.75) contrast(1.02);
+}
+.oarfish.photos figcaption {
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: rgba(212, 212, 212, 0.7);
+  padding-top: 0.3rem;
+}
+
+/* ---- the oarfish itself: swims up the left side, then hangs there ---- */
+.fish {
+  position: fixed;
+  /* anchored to the info box, not the viewport edge: box center is
+     at 62vw, box half-width is min(280px, 46vw), fish is ~22svh wide,
+     plus a small gap — so it stays snug beside the box at any width */
+  left: max(0.5rem, calc(62vw - min(280px, 46vw) - 22svh - 2.5rem - 4vw));
+  top: 6svh;
+  height: 88svh;
+  aspect-ratio: 176 / 706;
+  overflow: visible;
+  z-index: 2; /* in the water: above the fluid canvas, below the info box */
+  pointer-events: none;
+  transform: translateY(112vh); /* JS lerps this every frame from scroll */
+  will-change: transform;
+  filter: drop-shadow(0 0 16px rgba(130, 190, 255, 0.18));
+}
+/* continuous dorsal fin: the periodic frill scrolls downward behind
+   its clip mask, so the undulation travels the whole fin */
+.fish .fin-run { animation: fin-travel 1.3s linear infinite; }
+@keyframes fin-travel {
+  from { transform: translateY(-60px); } /* one frill period */
+  to   { transform: translateY(0); }
+}
+.fish .cray { transform-box: fill-box; transform-origin: bottom right; animation: crest-sway 3.4s ease-in-out infinite; }
+.fish .cray.c2 { animation-delay: -1.2s; }
+.fish .cray.c3 { animation-delay: -2.3s; }
+@keyframes crest-sway {
+  0%, 100% { transform: rotate(4deg); }
+  50%      { transform: rotate(-5deg); }
+}
+/* pelvic oar streamers trail and sway */
+.fish .oar { transform-box: fill-box; transform-origin: top right; animation: oar-sway 4.2s ease-in-out infinite; }
+.fish .oar.o2 { animation-delay: -2s; }
+@keyframes oar-sway {
+  0%, 100% { transform: rotate(2.5deg); }
+  50%      { transform: rotate(-3deg); }
+}
+@media (max-width: 759px) {
+  /* no room beside the box: fish sits behind it, faint */
+  .fish { height: 62svh; top: 14svh; left: 8vw; opacity: 0.35; z-index: 2; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fish .fin-run, .fish .cray, .fish .oar { animation: none !important; }
+}
+.oarfish h2 {
+  font-family: "Archivo Black", sans-serif;
+  font-size: clamp(1.3rem, 4vw, 1.9rem);
+  letter-spacing: 0.01em;
+  color: #ececec;
+  text-shadow: 0 0 14px rgba(200, 200, 200, 0.30);
+  margin-bottom: 1.1rem;
+}
+.oarfish .fact {
+  margin-bottom: 0.95rem;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.oarfish.show .fact { opacity: 1; transform: translateY(0); }
+.oarfish.show .fact:nth-child(2) { transition-delay: 0.55s; }
+.oarfish.show .fact:nth-child(3) { transition-delay: 0.85s; }
+.oarfish.show .fact:nth-child(4) { transition-delay: 1.15s; }
+.oarfish.show .fact:nth-child(5) { transition-delay: 1.45s; }
+.oarfish.show .fact:nth-child(6) { transition-delay: 1.75s; }
+.oarfish h3 {
+  font-size: 0.78rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #b8b8b8;
+  margin-bottom: 0.2rem;
+}
+.oarfish .fi { margin-right: 0.45em; }
+.oarfish p {
+  font-size: clamp(0.78rem, 2.4vw, 0.86rem);
+  line-height: 1.55;
+  color: rgba(212, 212, 212, 0.85);
+}
+@media (prefers-reduced-motion: reduce) {
+  .oarfish .binner { animation: none !important; }
+  .oarfish, .oarfish .fact { transition-duration: 0.01s; }
+}
+
+::selection { background: var(--ink); color: var(--white); }
+
+/* z0 — what gets revealed under the fluid. Swap this canvas for a
+   <video autoplay muted loop playsinline> to use real footage;
+   nothing else changes. */
+#bg {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+/* z1 — WebGL fluid layer: draws NEPHI-on-white, goes transparent
+   where the fluid dye flows, revealing #bg underneath. */
+#fluid {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* fallback hero if WebGL is unavailable or reduced motion is on */
+.hero-fallback {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: none;
+  justify-content: center;
+  align-items: center;
+  background: var(--white);
+}
+.hero-fallback h1 {
+  font-family: "Archivo Black", sans-serif;
+  font-size: clamp(4rem, 22vw, 24rem);
+  letter-spacing: -0.035em;
+  color: var(--ink);
+}
+body.no-fluid #fluid, body.no-fluid #bg { display: none; }
+body.no-fluid .hero-fallback { display: flex; }
+
+/* screen-reader heading, always present */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* z2 — chrome, difference-blended like the reference so it inverts
+   over whatever the fluid reveals */
+.chrome {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  color: var(--white);
+  mix-blend-mode: difference;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+}
+.chrome .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+.chrome a {
+  pointer-events: auto;
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 0.1em;
+}
+.chrome a:hover { border-bottom-style: dashed; }
+.chrome a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+  border-bottom-color: transparent;
+}
+
+@media (max-width: 600px) {
+  .chrome { font-size: 0.7rem; padding: 1rem; }
+}
